@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from scipy.stats import linregress
 from tqdm import tqdm
 from typing import Union
+import warnings
 
 
 
@@ -84,7 +85,7 @@ def find_all_pivot_points(ohlc: pd.DataFrame, left_count:int = 3, right_count:in
 
     if name_pivot != None:
         ohlc.loc[:,name_pivot] = ohlc.apply(lambda row: find_pivot_point(ohlc, row.name, left_count, right_count), axis=1)
-        ohlc.loc[:,f"{name_pivot}_pos"] =  ohlc.apply(lambda row: find_pivot_point_position(row), axis=1)
+        ohlc.loc[:,f"{name_pivot}_pos"] =  ohlc.apply(lambda row: find_pivot_point_position(row, name_pivot), axis=1)
     else:
         # Get the pivot points 
         ohlc.loc[:,"pivot"]     = ohlc.apply(lambda row: find_pivot_point(ohlc, row.name, left_count, right_count), axis=1)
@@ -94,21 +95,24 @@ def find_all_pivot_points(ohlc: pd.DataFrame, left_count:int = 3, right_count:in
     return ohlc 
 
 
-def find_pivot_point_position(row: pd.Series) -> float:
+def find_pivot_point_position(row: pd.Series, pivot_col: str = 'pivot') -> float:
     """
     Get the Pivot Point position and assign the Low or High value.  
 
     :params row to assign the pivot point position value if applicable. There must be a 'pivot' value
     :type :pd.Series 
     
+    :params pivot_col is the column name containing pivot data
+    :type :str
+    
     :return (float)
     """
    
    
     try:
-        if row['pivot']==1:
+        if row[pivot_col]==1:
             return row['Low']-1e-3
-        elif row['pivot']==2:
+        elif row[pivot_col]==2:
             return row['High']+1e-3
         else:
             return np.nan
@@ -118,7 +122,7 @@ def find_pivot_point_position(row: pd.Series) -> float:
         return np.nan
     
 
-def find_triangle_pattern(ohlc: pd.DataFrame, lookback: int = 25, min_points: int = 3, rlimit: int = 0.9, 
+def find_triangle_pattern(ohlc: pd.DataFrame, lookback: int = 25, min_points: int = 3, rlimit: float = 0.9, 
                           slmax_limit: float = 0.00001, slmin_limit: float = 0.00001,
                           triangle_type: str = "ascending", progress: bool = False ) -> pd.DataFrame:
     """
@@ -186,11 +190,15 @@ def find_triangle_pattern(ohlc: pd.DataFrame, lookback: int = 25, min_points: in
                 xxmax = np.append(xxmax, i)
 
        
-        if (xxmax.size < min_points and xxmin.size < min_points) or xxmax.size==0 or xxmin.size==0:
-               continue
+        # FIXED: Check if we have enough points for linear regression (need at least 2)
+        if xxmax.size < max(2, min_points) or xxmin.size < max(2, min_points):
+            continue
 
-        slmin, intercmin, rmin, _, _ = linregress(xxmin, minim)
-        slmax, intercmax, rmax, _, _ = linregress(xxmax, maxim)
+        # Suppress the SmallSampleWarning for edge cases
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=linregress.SmallSampleWarning if hasattr(linregress, 'SmallSampleWarning') else Warning)
+            slmin, intercmin, rmin, _, _ = linregress(xxmin, minim)
+            slmax, intercmax, rmax, _, _ = linregress(xxmax, maxim)
 
         if triangle_type == "symmetrical":
             if abs(rmax)>=rlimit and abs(rmin)>=rlimit and slmin>=slmin_limit and slmax<=-1*slmax_limit:

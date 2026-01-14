@@ -242,7 +242,7 @@ def candle_evening_doji_star(df: pd.DataFrame = None) -> pd.Series:
 
     
 if __name__ == "__main__":
-    df = pd.read_csv("HCLTECH_LAST_50_15MIN_IST.csv")
+    df = pd.read_csv("eurusd-4h.csv")
 
     choice = 15 # 1=hammer, 2=inverted hammer, 3=shooting star, 4=doji
 
